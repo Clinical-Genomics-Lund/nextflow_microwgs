@@ -188,7 +188,7 @@ process ariba {
 }
 
 
-process maskpolymorph {
+process bwa_maskpolymorph {
 	publishDir "${OUTDIR}/maskepolymorph", mode: 'copy', overwrite: true
 	cpus params.cpu_bwa
 	memory '32 GB'
@@ -200,20 +200,69 @@ process maskpolymorph {
 		set id, species, platform, file(asm_fasta), file(fastq_r1), file(fastq_r2) from asm_maskpolymorph.join(fastq_maskpolymorph, by:[0,1,2])
 
 	output:
-		set id, species, platform, file("${id}.spades.masked") into maskpoly_chewbbaca
+		set id, species, platform, file("${id}_contigs.fasta.sort.sam") into maskpoly_sam
 
 	script:
 		read2 = fastq_r2.name == 'SINGLE_END' ? '' : "$fastq_r2"
 
 	"""
 	bwa index $asm_fasta
-	bwa mem -t ${task.cpus} -R '@RG\\tID:${id}\\tSM:${id}\\tPL:${platform}' $asm_fasta $fastq_r1 $read2 \\
-		| samtools view -b - -@ ${task.cpus} \\
-		| samtools sort -@ ${task.cpus} - -o contigs.fasta.sort.bam
-	samtools index contigs.fasta.sort.bam
+	bwa mem -t ${task.cpus} -f ${id}_contigs.fasta.sort.sam -R '@RG\\tID:${id}\\tSM:${id}\\tPL:${platform}' $asm_fasta $fastq_r1 $read2
+	"""
+}
 
-	freebayes -f $asm_fasta contigs.fasta.sort.bam -C 2 -F 0.2 --pooled-continuous > contigs.fasta.vcf
 
+process samtools_maskpolymorph {
+	publishDir "${OUTDIR}/maskepolymorph", mode: 'copy', overwrite: true
+	memory '4 GB'
+	time '1h'
+	// cache 'deep'
+	tag "$id"
+
+	input:
+		set id, species, platform, file("${id}_contigs.fasta.sort.sam") from maskpoly_sam
+
+	output:
+		set id, species, platform, file("${id}_contigs.fasta.sort.bam") into maskpoly_bam
+	"""
+	samtools view -b - -@ ${task.cpus} \\
+	    | samtools sort -@ ${task.cpus} - -o "${id}_contigs.fasta.sort.bam"
+	samtools index "${id}_contigs.fasta.sort.bam"
+	"""
+}
+
+
+process freebayes_maskpolymorph {
+	publishDir "${OUTDIR}/maskepolymorph", mode: 'copy', overwrite: true
+	memory '8 GB'
+	time '1h'
+	// cache 'deep'
+	tag "$id"
+
+	input:
+		set id, species, platform, file("${id}_contigs.fasta.sort.bam") from maskpoly_bam
+
+	output:
+		set id, species, platform, file("${id}_contigs.fasta.vcf") into maskpoly_vcf
+	"""
+	freebayes -f $asm_fasta "${id}_contigs.fasta.vcf" -C 2 -F 0.2 --pooled-continuous > "${id}_contigs.fasta.vcf"
+	"""
+}
+
+
+process maskpolymorph_error_corr {
+	publishDir "${OUTDIR}/maskepolymorph", mode: 'copy', overwrite: true
+	memory '4 GB'
+	time '1h'
+	// cache 'deep'
+	tag "$id"
+
+	input:
+		set id, species, platform, file("${id}_contigs.fasta.vcf") from maskpoly_vcf
+
+	output:
+		set id, species, platform, file("${id}.spades.masked") into maskpoly_chewbbaca
+	"""
 	error_corr_assembly.pl $asm_fasta contigs.fasta.vcf > ${id}.spades.masked
 	"""
 }
