@@ -1,0 +1,15 @@
+Bootstrap:docker
+From:alpine:latest
+
+
+%labels
+	MAINTAINER Björn Hallström <bjorn.hallstrom@skane.se>
+	DESCRIPTION Singularity container for CMD microbiology WGS pipeline
+	VERSION 0.8.0
+
+
+%post
+     VERSION=2.30.0
+     wget "https://github.com/arq5x/bedtools2/releases/download/v${VERSION}/bedtools.static.binary"
+     chmod +x "bedtools.static.binary"
+	 mv "bedtools.static.binary" /usr/bin/bedtools

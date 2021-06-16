@@ -1,0 +1,16 @@
+Bootstrap:docker
+From:alpine:latest
+
+
+%labels
+	MAINTAINER Björn Hallström <bjorn.hallstrom@skane.se>
+	DESCRIPTION Singularity container for CMD microbiology WGS pipeline
+	VERSION 0.8.0
+
+
+%post
+     VERSION=0.8.0
+     wget "https://github.com/biod/sambamba/releases/download/v${VERSION}/sambamba-${VERSION}-linux-amd64-static.gz"
+     gzip -d "sambamba-${VERSION}-linux-amd64-static.gz"
+     chmod +x "sambamba-${VERSION}-linux-amd64-static"
+	 mv "sambamba-${VERSION}-linux-amd64-static" /usr/bin/sambamba
