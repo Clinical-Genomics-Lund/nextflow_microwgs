@@ -4,6 +4,7 @@ definitions=(bedtools sambamba picard)
 declare -A containers=( 
     [bwa]=https://depot.galaxyproject.org/singularity/bwa%3A0.7.17--pl5.22.0_2
     [kraken]=https://depot.galaxyproject.org/singularity/kraken:1.1.1--pl5262h7d875b9_5
+    [kraken2]=https://depot.galaxyproject.org/singularity/kraken2:2.1.2--pl5262h7d875b9_0
     [bracken]=https://depot.galaxyproject.org/singularity/bracken:2.6.1--py39h7cff6ad_2
     [samtools]=https://depot.galaxyproject.org/singularity/samtools%3A1.12--hd5e65b6_0
     [ariba]=https://depot.galaxyproject.org/singularity/ariba:2.14.6--py38h6ed170a_0

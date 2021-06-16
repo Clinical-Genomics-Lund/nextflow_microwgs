@@ -20,17 +20,36 @@ process bwa_align {
 		set id, species, platform, file(fastq_r1), file(fastq_r2) from fastq_bwa
 
 	output:
-		set id, species, platform, file("${id}.bwa.sort.bam"), file("${id}.bwa.sort.bam.bai") into bam_markdup, bam_postalignqc
+		set id, species, platform, file("${id}.sam") into bwa_sam
 
 	script:
 		fasta_ref = params.refpath+'/species/'+species+'/ref.fasta'
 		read2 = fastq_r2.name == 'SINGLE_END' ? '' : "$fastq_r2"
 
 	"""
-	bwa mem -R '@RG\\tID:${id}\\tSM:${id}\\tPL:illumina' -M -t ${task.cpus} $fasta_ref $fastq_r1 $read2 \\
-		| samtools view -Sb - \\
-		| samtools sort -o ${id}.bwa.sort.bam -
+	bwa mem  \\
+	-R '@RG\\tID:${id}\\tSM:${id}\\tPL:illumina' \\
+	-M \\
+	-t ${task.cpus} \\
+	$fasta_ref $fastq_r1 $read2 > ${id}.sam
+	"""
+}
 
+
+process convert_to_bam {
+	cpus params.cpu_bwa
+	memory '32 GB'
+	time '1h'
+	tag "$id"
+
+	input:
+		set id, species, platform, file("${id}.sam") from bwa_sam
+
+	output:
+		set id, species, platform, file("${id}.bwa.sort.bam"), file("${id}.bwa.sort.bam.bai") into bam_markdup, bam_postalignqc
+	"""
+	samtools view -Sb ${id}.sam \\
+		| samtools sort -o ${id}.bwa.sort.bam -
 	samtools index ${id}.bwa.sort.bam
 	"""
 }
@@ -54,6 +73,7 @@ process bam_markdup {
 	"""
 }
 
+
 process kraken {
 	publishDir "${OUTDIR}/kraken", mode: 'copy', overwrite: true
 	cpus params.cpu_many
@@ -65,7 +85,7 @@ process kraken {
 		set id, species, platform, file(fastq_r1), file(fastq_r2) from fastq_kraken
 
 	output:
-		set id, species, platform, file("${id}.bracken") into kraken_export
+		set id, species, platform, file("${id}.kraken.report") into kraken_output
 
 	script:
 		read_params = fastq_r2.name == 'SINGLE_END' ?
@@ -73,15 +93,32 @@ process kraken {
 			"--paired $fastq_r1 $fastq_r2"
 
 	"""
-    kraken2 \\
-			--gzip-compressed \\
-            --db ${params.krakendb} \\
-            --threads ${task.cpus} \\
-            --output ${id}.kraken.out \\
-            --report ${id}.kraken.report \\
-            $read_params
+	kraken2 \\
+		--gzip-compressed \\
+		--db ${params.krakendb} \\
+		--threads ${task.cpus} \\
+		--output ${id}.kraken.out \\
+		--report ${id}.kraken.report \\
+		$read_params
+	"""
+}
 
-    bracken -d ${params.krakendb} -r 150 -i ${id}.kraken.report -o ${id}.bracken
+
+process bracken {
+	publishDir "${OUTDIR}/kraken", mode: 'copy', overwrite: true
+	cpus params.cpu_many
+	memory '48 GB'
+	time '1h'
+	tag "$id"
+
+	input:
+		set id, species, platform, file("${id}.kraken.report") from kraken_output
+
+	output:
+		set id, species, platform, file("${id}.bracken") into kraken_export
+
+	"""
+	bracken -d ${params.krakendb} -r 150 -i ${id}.kraken.report -o ${id}.bracken
 	"""
 }
 
@@ -170,7 +207,7 @@ process ariba {
 		set id, species, platform, file(fastq_r1), file(fastq_r2) from fastq_ariba
 
 	output:
-		set id, species, platform, file("${id}.ariba.json") into ariba_export
+		set id, species, platform, file("${id}.ariba.report.tsv") into ariba_report
 
 	when:
 		fastq_r2.toString() != "SINGLE_END"
@@ -179,11 +216,31 @@ process ariba {
 	ariba run --force --threads ${task.cpus} ${params.refpath}/species/${species}/ariba \\
 		$fastq_r1 $fastq_r2 ariba.outdir
 
-	ariba summary --col_filter n --row_filter n ariba.summary ariba.outdir/report.tsv
+	ariba summary --col_filter n --row_filter n "${id}.ariba.report.tsv" ariba.outdir
+	"""
+}
 
+
+process ariba_export {
+	publishDir "${OUTDIR}/ariba", mode: 'copy', overwrite: true
+	// cache 'deep'
+	cpus params.cpu_many
+	memory '1 GB'
+	time '1h'
+	tag "$id"
+
+	input:
+		set id, species, platform, file("${id}.ariba.report.tsv") from ariba_report
+
+	output:
+		set id, species, platform, file("${id}.ariba.json") into ariba_export
+
+	when:
+		fastq_r2.toString() != "SINGLE_END"
+
+	"""
 	ariba2json.pl ${params.refpath}/species/${species}/ariba/02.cdhit.all.fa \\
 		 ariba.summary.csv ariba.outdir/report.tsv > ${id}.ariba.json
-	#echo foo > ${id}.ariba.json
 	"""
 }
 
@@ -214,7 +271,7 @@ process bwa_maskpolymorph {
 
 process samtools_maskpolymorph {
 	publishDir "${OUTDIR}/maskepolymorph", mode: 'copy', overwrite: true
-	memory '4 GB'
+	memory '2 GB'
 	time '1h'
 	// cache 'deep'
 	tag "$id"
@@ -252,7 +309,7 @@ process freebayes_maskpolymorph {
 
 process maskpolymorph_error_corr {
 	publishDir "${OUTDIR}/maskepolymorph", mode: 'copy', overwrite: true
-	memory '4 GB'
+	memory '1 GB'
 	time '1h'
 	// cache 'deep'
 	tag "$id"
