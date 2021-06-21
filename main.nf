@@ -207,7 +207,7 @@ process ariba {
 		set id, species, platform, file(fastq_r1), file(fastq_r2) from fastq_ariba
 
 	output:
-		set id, species, platform, file("${id}.ariba.report.tsv") into ariba_report
+		set id, species, platform, file("${id}.ariba.summary.csv"), file("${id}_report.tsv") into ariba_report
 
 	when:
 		fastq_r2.toString() != "SINGLE_END"
@@ -215,8 +215,10 @@ process ariba {
 	"""
 	ariba run --force --threads ${task.cpus} ${params.refpath}/species/${species}/ariba \\
 		$fastq_r1 $fastq_r2 ariba.outdir
-
-	ariba summary --col_filter n --row_filter n "${id}.ariba.report.tsv" ariba.outdir
+	# rename report
+	cp ariba.outdir/report.tsv ${id}_report.tsv
+	# make summary
+	ariba summary --col_filter n --row_filter n "${id}.ariba.summary" ${id}_report.tsv
 	"""
 }
 
@@ -230,17 +232,14 @@ process ariba_export {
 	tag "$id"
 
 	input:
-		set id, species, platform, file("${id}.ariba.report.tsv") from ariba_report
+		set id, species, platform, file("${id}.ariba.summary.csv"), file("${id}_report.tsv") from ariba_report
 
 	output:
 		set id, species, platform, file("${id}.ariba.json") into ariba_export
 
-	when:
-		fastq_r2.toString() != "SINGLE_END"
-
 	"""
 	ariba2json.pl ${params.refpath}/species/${species}/ariba/02.cdhit.all.fa \\
-		 ariba.summary.csv ariba.outdir/report.tsv > ${id}.ariba.json
+		 "${id}.ariba.summary.csv" ${id}_report.tsv > ${id}.ariba.json
 	"""
 }
 
