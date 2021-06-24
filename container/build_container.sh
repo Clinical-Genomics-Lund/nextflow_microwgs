@@ -1,6 +1,6 @@
 #!/usr/env bash
 
-definitions=(bedtools sambamba picard)
+definitions=(chewbbaca bedtools sambamba picard)
 declare -A containers=( 
     [bwa]=https://depot.galaxyproject.org/singularity/bwa%3A0.7.17--pl5.22.0_2
     [kraken]=https://depot.galaxyproject.org/singularity/kraken:1.1.1--pl5262h7d875b9_5
@@ -12,6 +12,8 @@ declare -A containers=(
     [spades]=https://depot.galaxyproject.org/singularity/spades:3.15.2--h95f258a_1
     [quast]=https://depot.galaxyproject.org/singularity/quast%3A5.0.2--py37pl5262h190e900_4
     [freebayes]=https://depot.galaxyproject.org/singularity/freebayes%3A1.3.5--py39hba5d119_3
+    [chewbbaca_2.1.0]=https://depot.galaxyproject.org/singularity/chewbbaca%3A2.1.0--py_0
+    [chewbbaca_v2.7.0]=https://depot.galaxyproject.org/singularity/chewbbaca%3A2.7.0--py_0
 )
 
 for tool in "${definitions[@]}"; do

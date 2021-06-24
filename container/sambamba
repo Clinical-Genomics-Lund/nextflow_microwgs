@@ -10,6 +10,7 @@ From:alpine:latest
 
 %post
      VERSION=0.8.0
+	 apk add --update bash
      wget "https://github.com/biod/sambamba/releases/download/v${VERSION}/sambamba-${VERSION}-linux-amd64-static.gz"
      gzip -d "sambamba-${VERSION}-linux-amd64-static.gz"
      chmod +x "sambamba-${VERSION}-linux-amd64-static"
