@@ -69,7 +69,7 @@ process bam_markdup {
 		set id, species, platform, file("${id}.dedup.bam"), file("${id}.dedup.bam.bai") into bam_qc
 
 	"""
-	sambamba markdup -t ${task.cpus} $bam ${id}.dedup.bam
+	sambamba markdup --tmpdir tmp -t ${task.cpus} $bam ${id}.dedup.bam
 	"""
 }
 
@@ -78,7 +78,7 @@ process kraken {
 	publishDir "${OUTDIR}/kraken", mode: 'copy', overwrite: true
 	cpus params.cpu_many
 	memory '48 GB'
-	time '1h'
+	time '2h'
 	tag "$id"
 
 	input:
@@ -108,7 +108,7 @@ process bracken {
 	publishDir "${OUTDIR}/kraken", mode: 'copy', overwrite: true
 	cpus params.cpu_many
 	memory '48 GB'
-	time '1h'
+	time '2h'
 	tag "$id"
 
 	input:
@@ -256,10 +256,11 @@ process bwa_maskpolymorph {
 		set id, species, platform, file(asm_fasta), file(fastq_r1), file(fastq_r2) from asm_maskpolymorph.join(fastq_maskpolymorph, by:[0,1,2])
 
 	output:
-		set id, species, platform, file("${id}_contigs.fasta.sort.sam") into maskpoly_sam
+		set id, species, platform, file(asm_fasta), file("${id}_contigs.fasta.sort.sam") into maskpoly_sam
 
 	script:
 		read2 = fastq_r2.name == 'SINGLE_END' ? '' : "$fastq_r2"
+		faidx = asm_fasta+'.fai'
 
 	"""
 	bwa index $asm_fasta
@@ -276,14 +277,18 @@ process samtools_maskpolymorph {
 	tag "$id"
 
 	input:
-		set id, species, platform, file("${id}_contigs.fasta.sort.sam") from maskpoly_sam
+		set id, species, platform, file(asm_fasta), file("${id}_contigs.fasta.sort.sam") from maskpoly_sam
 
 	output:
-		set id, species, platform, file("${id}_contigs.fasta.sort.bam") into maskpoly_bam
+		set id, species, platform, file(asm_fasta), file(asm_fasta_index), file("${id}_contigs.fasta.sort.bam") into maskpoly_bam
+	script:
+	    asm_fasta_index = asm_fasta+'.fai'
+
 	"""
-	samtools view -b - -@ ${task.cpus} \\
+	samtools view -b -@ ${task.cpus} ${id}_contigs.fasta.sort.sam \\
 	    | samtools sort -@ ${task.cpus} - -o "${id}_contigs.fasta.sort.bam"
 	samtools index "${id}_contigs.fasta.sort.bam"
+	samtools faidx "$asm_fasta"
 	"""
 }
 
@@ -296,12 +301,12 @@ process freebayes_maskpolymorph {
 	tag "$id"
 
 	input:
-		set id, species, platform, file("${id}_contigs.fasta.sort.bam") from maskpoly_bam
+		set id, species, platform, file(asm_fasta), file(asm_fasta_index) ,file("${id}_contigs.fasta.sort.bam") from maskpoly_bam
 
 	output:
-		set id, species, platform, file("${id}_contigs.fasta.vcf") into maskpoly_vcf
+		set id, species, platform, file(asm_fasta), file("${id}_contigs.fasta.vcf") into maskpoly_vcf
 	"""
-	freebayes -f $asm_fasta "${id}_contigs.fasta.vcf" -C 2 -F 0.2 --pooled-continuous > "${id}_contigs.fasta.vcf"
+	freebayes -f $asm_fasta "${id}_contigs.fasta.sort.bam" -C 2 -F 0.2 --pooled-continuous > "${id}_contigs.fasta.vcf"
 	"""
 }
 
@@ -314,19 +319,19 @@ process maskpolymorph_error_corr {
 	tag "$id"
 
 	input:
-		set id, species, platform, file("${id}_contigs.fasta.vcf") from maskpoly_vcf
+		set id, species, platform, file(asm_fasta), file("${id}_contigs.fasta.vcf") from maskpoly_vcf
 
 	output:
 		set id, species, platform, file("${id}.spades.masked") into maskpoly_chewbbaca
 	"""
-	error_corr_assembly.pl $asm_fasta contigs.fasta.vcf > ${id}.spades.masked
+	error_corr_assembly.pl $asm_fasta ${id}_contigs.fasta.vcf > ${id}.spades.masked
 	"""
 }
 
 
 process chewbbaca {
 	publishDir "${OUTDIR}/chewbbaca", mode: 'copy', overwrite: true, pattern: '*.chewbbaca'
-	cpus 7
+	cpus params.cpu_chewbbaca
 	memory '8 GB'
 	time '1h'
 	// cache 'deep'
@@ -339,13 +344,9 @@ process chewbbaca {
 	output:
 		set id, species, platform, file("${id}.chewbbaca") into chewbbaca_export
 		set id, species, platform, file("${id}.missingloci") into chewbbaca_register
-
-	script:
-		cgmlst_db = params.refpath+'/species/'+species+'/cgmlst'
-
 	"""
 	flock -e ${params.local_tmp}/chewbbaca.lock \\
-		  chewBBACA.py AlleleCall --fr -i ${asm_fasta} -g $cgmlst_db --ptf Staphylococcus_aureus.trn --cpu ${task.cpus} \\
+		  chewBBACA.py AlleleCall --fr -i ${asm_fasta} -g $params.cgmlst_db --ptf Staphylococcus_aureus.trn --cpu ${task.cpus} \\
 		  -o chewbbaca.folder
 
 	sed -e "s/NIPHEM/-/g" -e "s/NIPH/-/g" -e "s/LNF/-/g" -e "s/INF-*//g" -e "s/PLOT[^\t]*/-/g" -e "s/ALM/-/g" -e "s/ASM/-/g" \\
