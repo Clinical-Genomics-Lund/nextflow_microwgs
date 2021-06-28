@@ -9,7 +9,7 @@ From:alpine:latest
 
 
 %post
-     VERSION=2.30.0
-     wget "https://github.com/arq5x/bedtools2/releases/download/v${VERSION}/bedtools.static.binary"
+     BEDTOOLS_VERSION=2.30.0
+     wget "https://github.com/arq5x/bedtools2/releases/download/v${BEDTOOLS_VERSION}/bedtools.static.binary"
      chmod +x "bedtools.static.binary"
 	 mv "bedtools.static.binary" /usr/bin/bedtools

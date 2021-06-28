@@ -8,7 +8,7 @@ From:python:3
 	VERSION 2.1.0
 
 %post
-     CHEWBBACA_VERSION=2.1.0
+     CHEWBBACA_VERSION=2.7.0
      BLAST_VERSION=2.9.0
      PRODIGAL_VERSION=2.6.3
      MAFT_VERSION=7.480-1
@@ -28,4 +28,4 @@ From:python:3
 	 wget -O maft.deb "https://mafft.cbrc.jp/alignment/software/mafft_${MAFT_VERSION}_amd64.deb"
 	 dpkg -i maft.deb
 
-	 pip install biopython==1.70 chewbbaca=="${CHEWBBACA_VERSION}"
+	 pip install chewbbaca=="${CHEWBBACA_VERSION}"

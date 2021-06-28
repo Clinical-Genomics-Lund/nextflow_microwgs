@@ -18,14 +18,15 @@ From:perl:5-buster
 	apt-get install -y default-jre
 	rm -rf /var/lib/apt/lists/*
 	# install picard
-	wget https://github.com/broadinstitute/picard/releases/download/2.25.6/picard.jar
+    PICARD_VERSION=2.25.6
+	wget "https://github.com/broadinstitute/picard/releases/download/${PICARD_VERSION}/picard.jar"
 	mv picard.jar /usr/bin
 	# install cpanm deps
 	cpanm JSON
 	# install sambamba
-    VERSION=0.8.0
-    wget "https://github.com/biod/sambamba/releases/download/v${VERSION}/sambamba-${VERSION}-linux-amd64-static.gz"
-    gzip -d "sambamba-${VERSION}-linux-amd64-static.gz"
-    chmod +x "sambamba-${VERSION}-linux-amd64-static"
-	mv "sambamba-${VERSION}-linux-amd64-static" /usr/bin/sambamba
+	SAMBAMBA_VERSION=0.8.0
+    wget "https://github.com/biod/sambamba/releases/download/v${SAMBAMBA_VERSION}/sambamba-${SAMBAMBA_VERSION}-linux-amd64-static.gz"
+    gzip -d "sambamba-${SAMBAMBA_VERSION}-linux-amd64-static.gz"
+    chmod +x "sambamba-${SAMBAMBA_VERSION}-linux-amd64-static"
+	mv "sambamba-${SAMBAMBA_VERSION}-linux-amd64-static" /usr/bin/sambamba
 
