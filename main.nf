@@ -339,24 +339,56 @@ process chewbbaca {
 	tag "$id"
 
 	input:
-		set id, species, platform, file(asm_fasta) from maskpoly_chewbbaca
-
+		set id, species, platform, file(asm_fasta) from maskpoly_chewbbaca.groupTuple( by: 1)
 	output:
-		set id, species, platform, file("${id}.chewbbaca") into chewbbaca_export
-		set id, species, platform, file("${id}.missingloci") into chewbbaca_register
+		file("results_alleles.tsv") into chewbbaca_export
+		file(missingloci) into chewbbaca_register
+	script:
+		missingloci = "chewbbaca.missingloci"
 	"""
+	ls $asm_fasta > batch_input.list
 	flock -e ${params.local_tmp}/chewbbaca.lock \\
-		  chewBBACA.py AlleleCall --fr -i ${asm_fasta} -g $params.cgmlst_db --ptf Staphylococcus_aureus.trn --cpu ${task.cpus} \\
+		  chewBBACA.py AlleleCall --fr -i batch_input.list -g $params.cgmlst_db --ptf Staphylococcus_aureus.trn --cpu ${task.cpus} \\
 		  -o chewbbaca.folder
 
-	sed -e "s/NIPHEM/-/g" -e "s/NIPH/-/g" -e "s/LNF/-/g" -e "s/INF-*//g" -e "s/PLOT[^\t]*/-/g" -e "s/ALM/-/g" -e "s/ASM/-/g" \\
-	    chewbbaca.folder/results_*/results_alleles.tsv > ${id}.chewbbaca
-
-
-	tail -1 ${id}.chewbbaca | fmt -w 1 | tail -n +2 | grep '-' | wc -l > ${id}.missingloci
-
+	cp chewbbaca.folder/results_*/results_alleles.tsv results_alleles.tsv > chewbbaca.missingloci
+	bash parse_missing_loci.sh batch_input.list results_alleles.tsv $missingloci
 	"""
+}
 
+
+process split_chewbbaca_results {
+	publishDir "${OUTDIR}/chewbbaca", mode: 'copy', overwrite: true, pattern: '*.chewbbaca'
+	cpus 1
+	memory '1 GB'
+	time '1h'
+	input:
+		set id, species, platform, file(fastq_r1), file(fastq_r2), file(chewbbaca) from fastq_cgviz.combine(chewbbaca_export)
+	output:
+		set id, species, platform, file(fastq_r1), file(fastq_r2), file(chewbacca_result) into chewbacca_split
+	script:
+		chewbacca_result = id+'.chewbbaca'
+	"""
+	head -1 ${chewbbaca} > ${chewbacca_result}
+	grep ${id} ${chewbbaca} >> ${chewbacca_result}
+	"""
+}
+
+
+process split_chewbbaca_missing_loci {
+	publishDir "${OUTDIR}/chewbbaca", mode: 'copy', overwrite: true, pattern: '*.chewbbaca'
+	cpus 1
+	memory '1 GB'
+	time '1h'
+	input:
+		set id, species, platform, file(fastq_r1), file(fastq_r2), file(chewbbaca) from fastq_register.combine(chewbbaca_register)
+	output:
+		set id, species, platform, file(fastq_r1), file(fastq_r2), file(chewbacca_loci) into chewbacca_missing_loci
+	script:
+		chewbacca_loci = id+'.chewbbaca'
+	"""
+	grep ${id} ${chewbbaca} > ${chewbacca_loci}
+	"""
 }
 
 
@@ -380,8 +412,8 @@ process postalignqc {
 	postaln_qc.pl $bam $cgmlst_bed ${id} ${task.cpus} > ${id}.bwa.QC
 
 	"""
-
 }
+
 
 process to_cdm {
 	publishDir "${params.crondir}/qc", mode: 'copy', overwrite: true
@@ -392,13 +424,12 @@ process to_cdm {
 
 	input:
 		set id, species, platform, fastq_r1, fastq_r2, \
+			file(missingloci), \
 			file(quast), \
-			file(postalignqc), \
-			file(missingloci) \
-		from fastq_register\
+			file(postalignqc) \
+		from chewbacca_missing_loci\
 			 .join(quast_register,by:[0,1,2])\
-			 .join(postqc_register,by:[0,1,2])\
-			 .join(chewbbaca_register,by:[0,1,2])
+			 .join(postqc_register,by:[0,1,2])
 
 	output:
 		set id, species, platform, file("${id}.cdm")
@@ -430,27 +461,22 @@ process to_cdm {
 process to_cgviz {
 	publishDir "${params.crondir}/cgviz", mode: 'copy', overwrite: true
 	cpus 1
-	memory '8 GB'
+	memory '1 GB'
 	time '1h'
-	tag "$id"
-
 	input:
-		set id, species, platform, file(chewbbaca), \
-			fastq_r1, fastq_r2, \
-			file(quast), \
-			file(mlst), \
+		set id, species, platform, file(fastq_r1), file(fastq_r2), \
+		    file(chewbbaca),  \
+			file(quast),  \
+			file(mlst),   \
 			file(kraken), \
-			file(ariba) \
-		from chewbbaca_export\
-			.join(fastq_cgviz,by:[0,1,2])\
+			file(ariba)   \
+		from chewbacca_split\
 			.join(quast_export,by:[0,1,2])\
 			.join(mlst_export,by:[0,1,2])\
 			.join(kraken_export,by:[0,1,2])\
 			.join(ariba_export,by:[0,1,2])
-
 	output:
-		set id, species, platform, file("${id}.cgviz")
-
+		set species, platform, file("${id}.cgviz")
 	when:
 		params.cgviz
 
