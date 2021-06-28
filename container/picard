@@ -1,0 +1,31 @@
+Bootstrap:docker
+From:perl:5-buster
+
+%labels
+	MAINTAINER Björn Hallström <bjorn.hallstrom@skane.se>
+	DESCRIPTION Singularity container for CMD microbiology WGS pipeline
+	VERSION 0.0.1
+
+%environment
+	PATH=/opt/conda/envs/CMD-microwgs/bin/:$PATH
+	PICARD_HOME=/usr/bin/picard.jar
+	umask 0002
+
+%post
+	# install deps
+	apt-get clean -y
+	apt-get update -y
+	apt-get install -y default-jre
+	rm -rf /var/lib/apt/lists/*
+	# install picard
+	wget https://github.com/broadinstitute/picard/releases/download/2.25.6/picard.jar
+	mv picard.jar /usr/bin
+	# install cpanm deps
+	cpanm JSON
+	# install sambamba
+    VERSION=0.8.0
+    wget "https://github.com/biod/sambamba/releases/download/v${VERSION}/sambamba-${VERSION}-linux-amd64-static.gz"
+    gzip -d "sambamba-${VERSION}-linux-amd64-static.gz"
+    chmod +x "sambamba-${VERSION}-linux-amd64-static"
+	mv "sambamba-${VERSION}-linux-amd64-static" /usr/bin/sambamba
+
