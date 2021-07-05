@@ -322,9 +322,9 @@ process maskpolymorph_error_corr {
 		set id, species, platform, file(asm_fasta), file("${id}_contigs.fasta.vcf") from maskpoly_vcf
 
 	output:
-		set id, species, platform, file("${id}.spades.masked") into maskpoly_chewbbaca
+		set id, species, platform, file("${id}.spades.masked.fasta") into maskpoly_chewbbaca
 	"""
-	error_corr_assembly.pl $asm_fasta ${id}_contigs.fasta.vcf > ${id}.spades.masked
+	error_corr_assembly.pl $asm_fasta ${id}_contigs.fasta.vcf > ${id}.spades.masked.fasta
 	"""
 }
 
@@ -335,7 +335,6 @@ process chewbbaca {
 	memory '8 GB'
 	time '1h'
 	// cache 'deep'
-	queue='rs-fs1'
 	tag "$id"
 
 	input:
@@ -348,7 +347,7 @@ process chewbbaca {
 	"""
 	ls $asm_fasta > batch_input.list
 	flock -e ${params.local_tmp}/chewbbaca.lock \\
-		  chewBBACA.py AlleleCall --fr -i batch_input.list -g $params.cgmlst_db --ptf Staphylococcus_aureus.trn --cpu ${task.cpus} \\
+		  chewBBACA.py AlleleCall --fr -i ./ -g $params.cgmlst_db --ptf Staphylococcus_aureus.trn --cpu ${task.cpus} \\
 		  -o chewbbaca.folder
 
 	cp chewbbaca.folder/results_*/results_alleles.tsv results_alleles.tsv > chewbbaca.missingloci
